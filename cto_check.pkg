@@ -1,0 +1,9 @@
+v 1.0.0
+d 'CTO_CHECK': Command to write high frequency checks for SurveyCTO data
+d 
+d data
+d 
+d Distribution-Date:   20230824
+d License: Academic Free License v3.0
+d 
+F cto_check.do
