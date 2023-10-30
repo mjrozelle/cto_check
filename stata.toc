@@ -1,0 +1,8 @@
+v 0.0.1
+d Materials by Michael Rozelle
+d Wageningen University and Research
+d michael.rozelle@wur.nl
+
+d 'cto_check': A command to help write HFCs for SurveyCTO data
+
+p cto_check

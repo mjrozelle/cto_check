@@ -10,13 +10,12 @@ program define cto_check, rclass
 // instrument, then dataset, then dofile
 syntax, ///
 	INSTname(string) ///
-	DIRECTORY(string) ///
-	DOfile(string) ///
-	ENUM(string) ///
-	UID(string) ///
-	DURATION(string) ///
-	INTERESTvars(namelist) ///
-	HFCDIRectory(string)
+	OUTPUT(string) ///
+	DIRECTORY(string)
+
+clear
+version 17
+frames reset
 	
 version 17
 
@@ -35,8 +34,6 @@ questions, enablement conditions, and so on, as well as the "choices" sheet,
 which gives us all the value labels. Rather than open and close a million datasets,
 frames let us work on both these levels simultaneously.
 */
-
-local instname "/Users/michaelrozelle/Library/CloudStorage/Dropbox/Farm_Flock_Fork/3.instruments/yield_measurement/yield_measurement.xlsx"
 
 *===============================================================================
 * 	Choices
@@ -176,6 +173,7 @@ forvalues i = 1/`repeat_groups' {
 	
 	local taken_`i' = 0 // this local will indicate whether an "end_repeat" has already been assigned to a specific repeat group
 	local name_repeat_`i' = labelStata[`begin_`i'']
+	local varname_repeat_`i' = name[`begin_`i'']
 	
 }
 
@@ -230,6 +228,7 @@ that variable. In the majority of cases this should be benign, and you'll know
 pretty quickly if a variable needs attention.
 */
 
+frame rename default instrument
 drop if question_type < 0
 
 reshape long repeat_group_@, i(name) j(repeat_num)
@@ -250,16 +249,100 @@ forvalues i = 1/`repeat_groups' {
 
 drop repeat_group preloaded note calculation
 
-tempfile instrument
-save `instrument'
+*------------------------------------------------------------------
+*	Get all relevant variables
+*------------------------------------------------------------------
+
+local name_repeat_0 survey
+local varname_repeat_0 survey
+
+forvalues i = 1/6 {
+	
+	forvalues j = 0/`repeat_groups' {
+		
+		levelsof name if question_type == `i' ///
+			& dataset == "`name_repeat_`j''", local(`j'_v`i') clean
+	
+	}
+	
+}
 
 *===============================================================================
 * 	Open File
 *===============================================================================
 
-// Now we're about to write the instructions to a dofile. Buckle up
+local brek = char(10)
+local tab = char(9)
 
-file open myfile using "`dofile'", write text replace
+frame create hfc
+cwf hfc 
+
+insobs 1
+gen command = ""
+
+forvalues j = 0/`repeat_groups' {
+	
+	replace command = command + ///
+		"*==============================================================================="  ///
+		+ "`brek'* 	`name_repeat_`j''`brek'" + ///
+		"*===============================================================================" ///
+		+ "`brek'`brek'" + ///
+		`"use "`macval(directory)'/`varname_repeat_`j''.dta", clear`brek'`brek'"'
+	
+	// STRING VARIABLES
+	if "``j'_v1'" != "" { 
+		
+		replace command = command + ///
+			"// string variables`brek'local string_vars ``j'_v1'`brek'`brek'"
+		
+	}
+	
+	// SELECT ONE VARIABLES
+	if "``j'_v2'" != "" { 
+		
+		replace command = command + ///
+			"// select one variables`brek'local sel_one_vars ``j'_v2'`brek'`brek'"
+		
+	}
+	
+	// SELECT MULTIPLE VARIABLES
+	if "``j'_v3'" != "" { 
+		
+		replace command = command + ///
+			"// select multiple variables`brek'local sel_mult_vars ``j'_v3'`brek'`brek'"
+		
+	}
+	
+	// NUMERIC VARIABLES
+	if "``j'_v4'" != "" { 
+		
+		replace command = command + ///
+			"// numeric variables`brek'local numeric_vars ``j'_v4'`brek'`brek'"
+		
+	}
+	
+	// DATE VARIABLES
+	if "``j'_v5'" != "" { 
+		
+		replace command = command + ///
+			"// date variables`brek'local date_vars ``j'_v5'`brek'`brek'"
+		
+	}
+	
+	// DATETIME VARIABLES
+	if "``j'_v6'" != "" { 
+		
+		replace command = command + ///
+			"// datetime variables`brek'local datetime_vars ``j'_v6'`brek'`brek'"
+		
+	}
+	
+	
+	
+	
+}
+
+file open myfile using "`output'", write replace
 
 file write myfile ///
 	"/*" ///
@@ -267,111 +350,50 @@ file write myfile ///
 	_n "Date Created: `c(current_date)'" ///
 	_n "Author: `c(username)'" ///
 	_n "Note: " ///
-	_n "*/" _n(3) ///
+	_n "*/" _n(2) ///
 	"quietly {" _n(2) ///
 	"*===============================================================================" ///
 	_n "* 	Setup" _n /// 
 	"*===============================================================================" ///
-	_n(3) "clear all" _n "version 17" _n "set more off" _n "set graphics off" _n ///
-	"set maxvar 30000" _n "cap log close" _n "set trace off" ///
-	_n "set linesize 200" _n(3) ///
+	_n(2) "clear all" _n "version 17" _n "set more off" _n "set maxvar 30000" ///
+	_n "cap log close" _n "set trace off" _n "set linesize 200" _n(2) ///
 	"*===============================================================================" ///
 	_n "* 	Macros" _n /// 
 	"*===============================================================================" ///
-	_n(3) ///
+	_n(2) ///
 	"local" _tab `"today = date(c(current_date), "`datestyle'")"' _n ///
-	"local" _tab `"todaystr=string(\`today', "%td")"' _n(3) ///
+	"local" _tab `"todaystr = string(\`today', "%td")"' _n(2) ///
 	"*===============================================================================" ///
-	_n "* 	Load Datasets" _n /// 
-	"*===============================================================================" _n(2) ///
-	"frame rename default survey" _n `"use "`directory'/survey_level.dta""' _n(2)
-	
-levelsof dataset, local(datasets)
-foreach dataset in `datasets' {
-	
-	if "`dataset'" == "survey" {
-		
-		continue
-		
-	}
-	
-	file write myfile "frame create `dataset'" _n ///
-	`"frame `dataset': use "`directory'/`dataset'_level.dta""' _n(2)
-	
-}
-	
+	_n "* 	Program Definitions" _n /// 
+	"*===============================================================================" ///
+	_n(2) "prog define dispersion_check" _n(2) ///
+	"syntax varlist" _n ///
+	"foreach var of varlist \`varlist' {" _n(2) ///
+	_tab "sum \`var'" _n _tab "local obs = \`r(N)'" _n _tab ///
+	"local mean = \`r(mean)'" _n _tab "local sd = \`r(sd)'" _n _tab ///
+	"local max = \`r(max)'" _n _tab ///
+	"local digits = ceil(log(\`max')/log(10) )+ 3" _n(2) _tab ///
+	"count if \`var' < 0" _n _tab "if \`r(N)' == 0 local lower_bound = 0" ///
+	_n _tab "else local lower_bound : display %-\`digits'.2f \`mean' - (`strictness' * \`sd')" ///
+	_n(2) _tab "count if \`var' < \`lower_bound'" _n _tab ///
+	"local lowers = \`r(N)'" _n _tab ///
+	`"local lower_bound = strtrim("\`lower_bound'")"' _n(2) _tab ///
+	"local upper_bound : display %-\`digits'.2f \`mean' + (\`strictness' * \`sd')" ///
+	_n _tab "count if \`var' > \`upper_bound' & !missing(\`var')" _n _tab ///
+	"local uppers = \`r(N)'" _n _tab ///
+	`"local upper_bound = strtrim("\`upper_bound'")"' _n(2) _tab ///
+	"histogram \`var', kdensity xline(\`upper_bound' \`lower_bound') ///" ///
+	_n _tab(2) ///
+	`"note("Suggested lower constraint: \`lower_bound' (\`lowers' offending observations). Suggested upper constraint: \`upper_bound' (\`uppers' offending observations).", size(vsmall)) ///"' ///
+	_n _tab(2) `"title("{bf}\`: variable label \`var''", pos(11) size(2.75)) ///"' ///
+	_n _tab(2) `"subtitle("\`obs' observations", pos(11) size(2.5)) ///"' ///
+	_n _tab(2) `"ylabel(, grid gmax) ///"' _n _tab(2) ///
+	`"xmlabel(\`upper_bound' \`lower_bound', labsize(*1.5) tlength(medium)) ///"' ///
+	_n _tab(2) "name(\`var')" _n(2) "}" _n(2) "end" _n(2)
 
-*===============================================================================
-* 	Variables
-*===============================================================================
-
-sort order
-local v = 1
-local brek = char(10)
-local tab = char(9)
-
-forvalues i = 0(1)`repeat_groups' {
-	
-	if `i' == 0 {
-		
-		local section "survey"
-		
-	}
-	else {
-		
-		local section = "`repeat_name_`i''"
-		
-	}
-	
-	local title = proper("`section'")
-	
-	file write myfile "*===============================================================================" ///
-	_n "* 	`title'" _n /// 
-	"*===============================================================================" _n(2) ///
-	"cwf `section'" _n(2)
-	
-	levelsof name if dataset == "`section'" & question_type == 4, local(number_variables)
-	quietly foreach var in `number_variables' {
-		
-		local this_q if name == "`var'"
-		sum order `this_q'
-		local order = `r(max)' // order of questions in the survey
-		levelsof labelStata `this_q', local(stlabel) // Stata label
-		levelsof labelEnglishen `this_q', local(enlabel) // How question appeared in the survey
-		
-		file write myfile "*------------------------------------------------------------------" ///
-		_n "* 	`stlabel'" _n ///
-		"* 	`labelEnglishen'" _n /// 
-		"* 	QUESTION TYPE: Number" _n /// 
-		"*------------------------------------------------------------------" _n(2) ///
-		"sum `var', detail" ///
-		_n "histogram `var', kdensity xline(\`r(p5)') xline(\`r(p95)')" _n ///
-		`"graph export "`hfcdirectory'/`var'_histogram.png", as(png) replace"' _n(2) ///
-		"regress `var' i.`enum', vce(robust)" _n(2)
-	}
-	
-	levelsof name if dataset == "`section'" & question_type == 1, local(string_variables)
-	quietly foreach var in `string_variables' {
-
-		local this_q if name == "`var'"
-		sum order `this_q'
-		local order = `r(max)' // order of questions in the survey
-		
-		cap levelsof type2 `this_q', local(vallabel) clean // value label
-		
-		levelsof labelStata `quest', local(stlabel) // Stata label
-		
-		levelsof labelEnglishen `quest', local(enlabel) // How question appeared in the survey
-		
-	}
-	
-	
-}
-
-	
+file write myfile (command)
 file close myfile
-	
-	
+
 }
 
-end
+end 

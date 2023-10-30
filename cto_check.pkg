@@ -1,0 +1,9 @@
+v 0.0.1
+d 'CTO_CHECK': cto_check
+d 
+d A command to help write HFCs for SurveyCTO data
+d 
+d Distribution-Date:   20231030
+d License: Academic Free License v3.0
+d 
+F cto_check.ado
