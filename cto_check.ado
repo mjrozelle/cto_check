@@ -11,7 +11,9 @@ program define cto_check, rclass
 syntax, ///
 	INSTname(string) ///
 	OUTPUT(string) ///
-	DIRECTORY(string)
+	DIRECTORY(string) ///
+	ENUM(name) ///
+	SUCCESSCONDITION(string)
 
 clear
 version 17
@@ -389,11 +391,88 @@ file write myfile ///
 	_n _tab(2) `"subtitle("\`obs' observations", pos(11) size(2.5)) ///"' ///
 	_n _tab(2) `"ylabel(, grid gmax) ///"' _n _tab(2) ///
 	`"xmlabel(\`upper_bound' \`lower_bound', labsize(*1.5) tlength(medium)) ///"' ///
-	_n _tab(2) "name(\`var')" _n(2) "}" _n(2) "end" _n(2)
-
+	_n _tab(2) "name(\`var')" _n(2) "}" _n(2) "end" _n(2) ///
+	`"prog define duration_graph"' _n(2) ///
+	`"preserve"' _n `"keep if `successcondition'"' _n ///
+	`"replace duration = duration * 1e2"' _n(2) ///
+	`"collapse (mean) duration, by(`enum')"' _n(2) ///
+	`"egen double duration_z = std(duration)"' _n ///
+	`"generate above = (duration_z >= 0)"' _n ///
+	`"sort duration_z, stable"' _n ///
+	`"generate rank_des = _n * 2"' _n ///
+	`"cap sdecode `enum', replace"' _n ///
+	`"labmask rank_des, value(`enum')"' _n ///
+	`"generate zero = 0"' _n ///
+	`"tostring duration, gen(duration_lab) force format(%tCMM:SS)"' _n ///
+	`"count"' _n `"local max = \`r(N)' * 2"' _n(2) ///
+	`"twoway  (rspike zero duration_z rank_des, horizontal) ///"' _n ///
+	_tab `"(scatter rank_des duration_z, msize(6) mlabel(duration_lab) ///"' ///
+	_n _tab `"mlabsize(1.6) mlabposition(0)), ///"' _n _tab ///
+	`"xlabel(-3(0.5)3, nolabels noticks) ylabel(2(2)\`max', ///"' _n _tab ///
+	`"valuelabel labsize(2)) legend(off) ///"' _n _tab ///
+	`"ytitle("Enumerator") ///"' _n _tab ///
+	`"title("{bf}Average Survey Duration", size(2.75) pos(11)) ///"' _n _tab ///
+	`"subtitle("When `successcondition'", size(2.5) pos(11)) ///"' _n _tab ///
+	`"scheme(white_tableau) ysize(8)"' _n(2) `"restore"' _n(2) `"end"' _n(2)
+	
 file write myfile (command)
+file write myfile _n "}"
 file close myfile
 
 }
 
 end 
+
+
+// gen dummy = 1 if consented == 1
+//
+// foreach var of varlist `string_vars' `sel_one_vars' `sel_mult_vars' `numeric_vars' {
+//	
+// 	if ustrregexm("`var'", "^reserved_name_") continue
+//	
+// 	local v_`var' : variable label `var'
+// 	local type : type `var'
+// 	if ustrregexm("`type'", "^str") {
+//		
+// 		gen NO_`var' = `var' == ""
+//		
+// 		local col_cmd `col_cmd' (sum) NO_`var'
+//		
+// 	}
+// 	else {
+//		
+// 		gen NO_`var' = `var' == .
+// 		gen REF_`var' = cond(NO_`var' == 0, `var' == .r, .)
+// 		gen DK_`var' = cond(NO_`var' == 0, `var' == .d, .)
+//		
+// 		local col_cmd `col_cmd' (sum) NO_`var' REF_`var' DK_`var'
+//		
+// 	}
+//	
+// }
+//
+// collapse (sum) dummy `col_cmd', by(enum_name)
+//
+// foreach var in `string_vars' `sel_one_vars' `sel_mult_vars' `numeric_vars' {
+//	
+// 	label variable NO_`var' "`v_`var''"
+// 	cap label variable REF_`var' "`v_`var''"
+// 	cap label variable DK_`var' "`v_`var''"
+//	
+// }
+//
+// reshape long NO_ REF_ DK_, i(enum_name) j(variable) string
+// renvars *_, postsub("_" "")
+//
+// bysort enum_name: egen median = median(NO)
+// egen category = axis(median enum_name), label(enum_name)
+//
+// expand dummy
+//
+// spineplot NO category, ///
+// xtitle("Proportion of all Questions", size(small) axis(1)) ///
+// xtitle("enum_name", size(small) axis(2)) ///
+// title("{bf}Number of Missing Responses per Surveyor", pos(11) size(2.75)) ///
+// subtitle("Survey-level variables which are completely missing", pos(11) size(2.5)) ///
+// ytitle("Proportion within enum_name", axis(2) size(small)) ///
+// xlabel(, angle(45) axis(2) labsize(1.7)) xsize(7)
